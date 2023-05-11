@@ -1,0 +1,8 @@
+---
+# defaults file for roles/wordpressdeploy
+    mysql_root_password: "secure1"
+    db_name: "wp-db"
+    db_user: "wp-db-user"
+    db_password: "secure2"
+    wordpress_root: "/var/www/wordpress"
+    ServerName: "3.27.73.149"

@@ -1,0 +1,153 @@
+---
+# tasks file for roles/wordpressdeploy
+#
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install packages
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - apache2
+        - ghostscript
+        - libapache2-mod-php
+        - php
+        - php-curl
+        - php-json
+        - php-mbstring
+        - php-mysql
+        - php-xml
+
+
+    - name: Create WordPress directory
+      ansible.builtin.file:
+        path: /var/www/wordpress
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+
+    - name: deplying wordpress to remote server
+      synchronize:
+        src: /home/abinjdani/wordpress/
+        dest: /var/www/wordpress/
+
+    - name: Copy virtual host configuration file
+      template:
+        src: wordpress.conf.j2
+        dest: /etc/apache2/sites-available/wordpress.conf
+        mode: 0644
+
+
+    - name: Install MySQL server and client
+      apt:
+        name:
+          - mysql-server
+          - mysql-client
+        state: absent
+
+    - name: Install MySQL Python library
+      apt:
+        name: python3-pymysql
+        state: present
+
+    - name: Set MySQL root password
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_user: root
+        login_password: ""
+        login_host: localhost
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        state: present
+        check_implicit_admin: yes
+      become: true
+
+    - name: Remove anonymous MySQL user
+      mysql_user:
+        name: ""
+        host_all: yes
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_host: localhost
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        state: absent
+
+    - name: Remove test MySQL database
+      mysql_db:
+        name: test
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_host: localhost
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        state: absent
+
+    - name: Reload MySQL privileges
+      mysql_db:
+        name: flush_privileges
+        state: present
+        login_host: localhost
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      become: true
+
+    - name: Create MySQL user with privileges
+      mysql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_password }}"
+        priv: "{{ db_name }}.*:ALL"
+        host: localhost
+        state: present
+        login_host: localhost
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      become: true
+
+    - name: Create database
+      mysql_db:
+        name: "{{ db_name }}"
+        state: present
+        login_host: localhost
+        login_user: "{{ db_user }}"
+        login_password: "{{ db_password }}"
+      become: true
+
+    - name: Copy wp-config-sample.php to wp-config.php
+      ansible.builtin.copy:
+        src: /home/abinjdani/wordpress/wp-config-sample.php
+        dest: /var/www/wordpress/wp-config.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+
+
+    - name: Replace database name in wp-config.php
+      become: true
+      replace:
+        path: /var/www/wordpress/wp-config.php
+        regexp: 'database_name_here'
+        replace: 'wp-db'
+
+    - name: Replace database username in wp-config.php
+      become: true
+      replace:
+        path: /var/www/wordpress/wp-config.php
+        regexp: 'username_here'
+        replace: 'wp-db-user'
+
+    - name: Replace database password in wp-config.php
+      become: true
+      replace:
+        path: /var/www/wordpress/wp-config.php
+        regexp: 'password_here'
+        replace: 'secure2'
+
+    - name: restart apache
+      service:
+        name: apache2
+        state: restarted
+        enabled: yes
